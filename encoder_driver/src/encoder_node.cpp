@@ -14,6 +14,10 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
+#include <poll.h>
+
+const int TIMEOUT_MILLISECOND = 200;
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "encoder_node");
@@ -53,42 +57,49 @@ int main(int argc, char **argv)
 
     while (ros::ok())
     {
+        struct pollfd pfds[1];
 
-        ROS_INFO("Waiting a frame...");
-        nbytes = read(s, &frame, sizeof(struct can_frame));
+        pfds[0].fd = s;
+        pfds[0].events = POLLIN;
 
-        if (nbytes > 0)
+        int event = poll(pfds, 1, TIMEOUT_MILLISECOND);
+
+        if (event == -1)
         {
-            uint8_t length = frame.data[0];
-            uint8_t deviceId = frame.data[1];
-            uint8_t cmdId = frame.data[2];
+            perror("Poll error");
+        }
+        else
+        {
+            nbytes = read(s, &frame, sizeof(struct can_frame));
 
-            if (length != frame.can_dlc || length <= 3)
+            if (nbytes > 0)
             {
-                ROS_INFO("Invalid Packet, length=%d, can_dlc=%u", length, frame.can_dlc)
-                continue;
+                uint8_t length = frame.data[0];
+                uint8_t deviceId = frame.data[1];
+                uint8_t cmdId = frame.data[2];
+
+                if (length != frame.can_dlc || length <= 3)
+                {
+                    ROS_INFO("Invalid Packet, length=%d, can_dlc=%u", length, frame.can_dlc);
+                    continue;
+                }
+
+                uint32_t reading = 0;
+                for (int i = 3; i < length; ++i)
+                {
+                    reading |= frame.data[i] << 8 * (i - 3);
+                }
+
+                std_msgs::UInt32 msg;
+
+                msg.data = reading;
+
+                ROS_INFO("%x published", reading);
+
+                pub.publish(msg);
+
+                ros::spinOnce();
             }
-
-            for (int i = 0; i < length; ++i)
-            {
-                ROS_INFO("Pos %d: %x", i, frame.data[i]);
-            }
-
-            uint32_t reading = 0;
-            for (int i = 3; i < length; ++i)
-            {
-                reading |= frame.data[i] << 8 * (i - 3);
-            }
-
-            std_msgs::UInt32 msg;
-
-            msg.data = reading;
-
-            ROS_INFO("%x published", reading);
-
-            pub.publish(msg);
-
-            ros::spinOnce();
         }
     }
 
