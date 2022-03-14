@@ -22,42 +22,47 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "encoder_node");
 
-    ROS_INFO("Init node");
 
-    ros::NodeHandle nh;
+    ros::NodeHandle nh("~");
 
     int s, i;
     int nbytes;
-    struct sockaddr_can addr;
-    struct ifreq ifr;
-    struct can_frame frame;
+    sockaddr_can addr;
+    can_frame frame;
+    ifreq ifr;
 
     if ((s = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
-        perror("Socket");
+        ROS_ERROR("Socket Error");
         return 1;
     }
 
-    strcpy(ifr.ifr_name, "vcan0");
+    std::string ifrName;
+    if(! nh.getParam("ifr_name", ifrName))
+    {
+        ROS_ERROR("Cannot retrieve param ifr_name");
+        return 1;
+    }
+
+    strcpy(ifr.ifr_name, ifrName.c_str());
     ioctl(s, SIOCGIFINDEX, &ifr);
 
     memset(&addr, 0, sizeof(addr));
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
 
-    if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    if (bind(s, (sockaddr *)&addr, sizeof(addr)) < 0)
     {
-        perror("Bind");
+        ROS_ERROR("Error when binding socket");
         return 1;
     }
+    ros::Publisher pub = nh.advertise<std_msgs::UInt32>("count", 1);
 
-    ROS_INFO("Socket Setup Successfully");
-
-    ros::Publisher pub = nh.advertise<std_msgs::UInt32>("encoder_node/count", 1);
-
+    ROS_INFO("Init node");
+    
     while (ros::ok())
     {
-        struct pollfd pfds[1];
+        pollfd pfds[1];
 
         pfds[0].fd = s;
         pfds[0].events = POLLIN;
@@ -66,11 +71,11 @@ int main(int argc, char **argv)
 
         if (event == -1)
         {
-            perror("Poll error");
+            ROS_ERROR("Poll error");
         }
         else
         {
-            nbytes = read(s, &frame, sizeof(struct can_frame));
+            nbytes = read(s, &frame, sizeof(can_frame));
 
             if (nbytes > 0)
             {
@@ -80,7 +85,7 @@ int main(int argc, char **argv)
 
                 if (length != frame.can_dlc || length <= 3)
                 {
-                    ROS_INFO("Invalid Packet, length=%d, can_dlc=%u", length, frame.can_dlc);
+                    ROS_WARN("Invalid Packet, length=%d, can_dlc=%u", length, frame.can_dlc);
                     continue;
                 }
 
@@ -91,13 +96,8 @@ int main(int argc, char **argv)
                 }
 
                 std_msgs::UInt32 msg;
-
                 msg.data = reading;
-
-                ROS_INFO("%x published", reading);
-
                 pub.publish(msg);
-
                 ros::spinOnce();
             }
         }
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 
     if (close(s) < 0)
     {
-        perror("Close");
+        ROS_ERROR("Error when closing socket");
         return 1;
     }
 
