@@ -1,0 +1,9 @@
+<launch>
+    <arg name="ifr_name" default="can0"/>
+    <arg name="id" default="0"/>
+
+    <node name="encoder_node_$(arg id)" pkg="encoder_driver" type="encoder_node" output="screen" respawn="true">
+        <param name="id" value="$(arg id)"/>
+        <param name="ifr_name" value="$(arg ifr_name)"/> 
+    </node>
+</launch>
