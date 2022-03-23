@@ -16,6 +16,8 @@
 
 #include <poll.h>
 
+#include <sstream>
+
 const int TIMEOUT_MILLISECOND = 200;
 
 int main(int argc, char **argv)
@@ -56,6 +58,32 @@ int main(int argc, char **argv)
         ROS_ERROR("Error when binding socket");
         return 1;
     }
+
+    std::string filterID;
+    if(nh.getParam("filter_id", filterID))
+    {
+        if(filterID != "")
+        {
+            std::stringstream ss;
+            ss << std::hex << filterID;
+            uint32_t canId;
+            ss >> canId;
+            if(canId > 0xfff)
+            {
+                ROS_WARN("Invalid can filter id: %x", canId);
+            }
+            else
+            {
+                can_filter filter[1];
+                filter[0].can_id = canId;
+                filter[0].can_mask = CAN_SFF_MASK;
+
+                setsockopt(s, SOL_CAN_RAW, CAN_RAW_FILTER, &filter, sizeof(filter));
+                ROS_INFO("Set filter id=%x", canId);
+            }
+        }
+    }
+
     ros::Publisher pub = nh.advertise<std_msgs::UInt32>("count", 1);
 
     ROS_INFO("Init node");

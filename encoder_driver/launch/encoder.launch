@@ -2,6 +2,7 @@
     <arg name="ifr_name" default="can0"/>
 
     <node name="encoder_node_0" pkg="encoder_driver" type="encoder_node" output="screen" respawn="true">
+        <param name="filter_id" value="4a1" type="str"/>
         <param name="ifr_name" value="$(arg ifr_name)"/> 
     </node>
 </launch>
